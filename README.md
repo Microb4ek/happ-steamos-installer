@@ -1,6 +1,6 @@
 # Установщик Happ для SteamOS
 
-[Скачать Install-Happ.desktop](https://github.com/Microb4ek/happ-steamos-installer/releases/latest/download/Install-Happ.desktop)
+[Скачать Install-Happ.desktop](https://github.com/Microb4ek/happ-steamos-installer/raw/refs/tags/v1.0.0/Install-Happ.desktop)
 
 Устанавливает **Happ 4.8.3** и его службу VPN/TUN на Steam Deck и другие устройства с **SteamOS x86-64**. Это сторонний установщик. Пакет загружается непосредственно из [официального выпуска Happ](https://github.com/Happ-proxy/happ-desktop/releases/tag/4.8.3) и проверяется по SHA-256.
 
