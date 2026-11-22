@@ -35,12 +35,27 @@ set -euo pipefail
 umask 022
 archive=$1 version=$2 digest=$3
 base=/var/lib/happ-steamos-installer
-target=$base/$version
+storage=/home/.happ-steamos-installer
+target=$storage/$version
 service=/etc/systemd/system/happd.service
 install -d -m 0755 "$base"
 exec 9>"$base/install.lock"
 flock -n 9 || { echo 'Уже запущена другая установка.' >&2; exit 1; }
-stage=$(mktemp -d "$base/.install.XXXXXXXX")
+# happd runs as root, so the package must live outside the user's writable home.
+for dir in /home "$storage"; do
+    if [[ -e $dir || -L $dir ]]; then
+        [[ -d $dir && ! -L $dir && $(stat -c %u "$dir") == 0 ]] &&
+            (( (8#$(stat -c %a "$dir") & 0022) == 0 )) || {
+            echo "Небезопасные права каталога $dir. Установка остановлена." >&2; exit 1;
+        }
+    fi
+done
+install -d -m 0755 "$storage"
+# Keep an existing complete v1.0.0 installation and its runtime data.
+if [[ -x $base/$version/bin/Happ && -x $base/$version/bin/happd ]]; then target=$base/$version; fi
+available=$(df -Pk "$storage" | awk 'END { print $4 }')
+(( available >= 409600 )) || { echo 'Для распаковки Happ нужно 400 МиБ свободного места на разделе /home.' >&2; exit 1; }
+stage=$(mktemp -d "$storage/.install.XXXXXXXX")
 relock=0
 cleanup() {
     status=$?
@@ -54,6 +69,7 @@ trap 'exit 130' INT TERM HUP
 # Verify a private root-owned copy before root extracts any files.
 cp -- "$archive" "$stage/package"
 printf '%s  %s\n' "$digest" "$stage/package" | sha256sum -c -
+printf 'Проверка завершена. Распаковываю файлы Happ…\n'
 tar --zstd --no-same-owner -xf "$stage/package" -C "$stage" \
     opt/happ etc/systemd/system/happd.service usr/share/icons usr/share/applications/Happ.desktop usr/share/mime
 unit=$stage/etc/systemd/system/happd.service
@@ -72,8 +88,7 @@ if [[ ! -d $target ]]; then
     mv "$stage/usr/share" "$stage/opt/happ/share"
     mv "$stage/opt/happ" "$target"
 fi
-ln -s "$target" "$stage/current"
-mv -Tf "$stage/current" "$base/current"
+ln -sfnT "$target" "$base/current"
 if [[ ! -L /opt/happ ]]; then
     # Some SteamOS images mount /opt read-only. Restore its original state.
     if ! ln -s "$base/current" /opt/happ 2>/dev/null; then
